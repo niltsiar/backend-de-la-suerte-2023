@@ -1,20 +1,13 @@
-val ktor_version: String by project
-val kotlin_version: String by project
-val logback_version: String by project
-
+@Suppress("DSL_SCOPE_VIOLATION")
 plugins {
-    kotlin("jvm") version "1.8.10"
-    id("io.ktor.plugin") version "2.2.4"
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.8.10"
+    application
+    id(libs.plugins.kotlin.jvm.pluginId)
+    alias(libs.plugins.kotlinx.serialization)
+    alias(libs.plugins.ktor)
 }
 
-group = "dev.niltsiar.luckybackend"
-version = "0.0.1"
 application {
-    mainClass.set("dev.niltsiar.luckybackend,ApplicationKt")
-
-    val isDevelopment: Boolean = project.ext.has("development")
-    applicationDefaultJvmArgs = listOf("-Dio.ktor.development=$isDevelopment")
+    mainClass by "dev.niltsiar.luckybackend,ApplicationKt"
 }
 
 repositories {
@@ -22,7 +15,6 @@ repositories {
 }
 
 dependencies {
-    implementation("io.ktor:ktor-server-core-jvm:$ktor_version")
-    implementation("io.ktor:ktor-server-netty-jvm:$ktor_version")
-    implementation("ch.qos.logback:logback-classic:$logback_version")
+    implementation(libs.bundles.ktor.server)
+    implementation(libs.logback.classic)
 }
