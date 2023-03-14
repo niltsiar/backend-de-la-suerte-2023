@@ -17,12 +17,12 @@ fun OrderPersistence(): OrderPersistence {
 
         override suspend fun saveOrder(order: Order) {
             val file = File(STORAGE_FILE)
-            file.writeText(order.serialize())
+            file.appendText("${order.serialize()}${System.lineSeparator()}")
         }
 
         override suspend fun getLastOrder(): Order {
             val file = File(STORAGE_FILE)
-            return Order.deserialize(file.readText())
+            return Order.deserialize(file.readLines().last())
         }
     }
 }
