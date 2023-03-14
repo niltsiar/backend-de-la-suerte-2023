@@ -4,6 +4,7 @@ import arrow.continuations.SuspendApp
 import arrow.continuations.ktor.server
 import arrow.fx.coroutines.resourceScope
 import dev.niltsiar.luckybackend.routes.orderRoutes
+import dev.niltsiar.luckybackend.service.OrderService
 import io.ktor.server.application.Application
 import io.ktor.server.netty.Netty
 import kotlin.time.Duration.Companion.seconds
@@ -19,5 +20,5 @@ fun main() = SuspendApp {
 }
 
 fun Application.app() {
-    orderRoutes()
+    orderRoutes(OrderService())
 }
