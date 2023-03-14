@@ -3,6 +3,7 @@ package dev.niltsiar.luckybackend
 import arrow.continuations.SuspendApp
 import arrow.continuations.ktor.server
 import arrow.fx.coroutines.resourceScope
+import dev.niltsiar.luckybackend.repo.OrderPersistence
 import dev.niltsiar.luckybackend.routes.orderRoutes
 import dev.niltsiar.luckybackend.service.OrderService
 import io.ktor.server.application.Application
@@ -20,5 +21,5 @@ fun main() = SuspendApp {
 }
 
 fun Application.app() {
-    orderRoutes(OrderService())
+    orderRoutes(OrderService(OrderPersistence()))
 }

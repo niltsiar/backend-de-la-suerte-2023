@@ -1,12 +1,16 @@
 package dev.niltsiar.luckybackend.service
 
+import dev.niltsiar.luckybackend.repo.OrderPersistence
 import java.time.Instant
 import java.util.UUID
 
 data class Order(
     val id: String,
     val createdAt: Instant,
-)
+) {
+
+    companion object
+}
 
 interface OrderService {
 
@@ -14,20 +18,21 @@ interface OrderService {
     suspend fun getLastOrder(): Order
 }
 
-fun OrderService(): OrderService {
+fun OrderService(
+    orderPersistence: OrderPersistence,
+): OrderService {
     return object : OrderService {
 
-        private var lastOrder: Order? = null
-
         override suspend fun createOrder() {
-            lastOrder = Order(
+            val newOrder = Order(
                 id = UUID.randomUUID().toString(),
                 createdAt = Instant.now(),
             )
+            orderPersistence.saveOrder(newOrder)
         }
 
         override suspend fun getLastOrder(): Order {
-            return lastOrder!!
+            return orderPersistence.getLastOrder()
         }
     }
 }
