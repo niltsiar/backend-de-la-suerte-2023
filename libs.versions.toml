@@ -3,6 +3,8 @@ kotlin = "1.8.10"
 coroutines = "1.6.4"
 ktor = "2.2.4"
 logback = "1.4.5"
+arrow = "1.1.5"
+suspendapp = "0.4.0"
 
 
 [libraries]
@@ -12,11 +14,23 @@ coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", ve
 ktor-server-core = { module = "io.ktor:ktor-server-core", version.ref = "ktor" }
 ktor-server-netty = { module = "io.ktor:ktor-server-netty", version.ref = "ktor" }
 logback-classic = { module = "ch.qos.logback:logback-classic", version.ref = "logback" }
+arrow-core = { module = "io.arrow-kt:arrow-core", version.ref = "arrow" }
+arrow-fx = { module = "io.arrow-kt:arrow-fx-coroutines", version.ref = "arrow" }
+suspendapp = { module = "io.arrow-kt:suspendapp", version.ref = "suspendapp" }
+suspendapp-ktor = { module = "io.arrow-kt:suspendapp-ktor", version.ref = "suspendapp" }
 
 [bundles]
 ktor-server = [
     "ktor-server-core",
     "ktor-server-netty",
+]
+arrow = [
+    "arrow-core",
+    "arrow-fx",
+]
+suspendapp = [
+    "suspendapp",
+    "suspendapp-ktor",
 ]
 
 [plugins]

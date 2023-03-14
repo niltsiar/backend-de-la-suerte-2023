@@ -1,9 +1,14 @@
 package dev.niltsiar.luckybackend
 
-import io.ktor.server.engine.embeddedServer
+import arrow.continuations.SuspendApp
+import arrow.continuations.ktor.server
+import arrow.fx.coroutines.resourceScope
 import io.ktor.server.netty.Netty
+import kotlinx.coroutines.awaitCancellation
 
-fun main() {
-    embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = { })
-        .start(wait = true)
+fun main() = SuspendApp {
+    resourceScope {
+        server(Netty, port = 8080, host = "0.0.0.0")
+        awaitCancellation()
+    }
 }
