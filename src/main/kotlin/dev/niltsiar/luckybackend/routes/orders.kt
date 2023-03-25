@@ -3,6 +3,8 @@ package dev.niltsiar.luckybackend.routes
 import arrow.core.Either
 import arrow.core.continuations.either
 import arrow.core.toNonEmptyListOrNull
+import dev.niltsiar.luckybackend.domain.DomainError
+import dev.niltsiar.luckybackend.domain.Unexpected
 import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
 import dev.niltsiar.luckybackend.service.OrderService
@@ -17,10 +19,10 @@ import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.util.pipeline.PipelineContext
-import java.util.UUID
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 fun Application.orderRoutes(
     orderService: OrderService,
@@ -28,14 +30,12 @@ fun Application.orderRoutes(
     routing {
         route("/orders") {
             post {
-                val res = either {
+                val res = either<DomainError, RemoteOrder> {
                     val remoteOrder = receiveCatching<RemoteOrder>().bind()
-                    Either.catch {
-                        remoteOrder.asOrder()
-                    }.bind()
-                    remoteOrder
+                    val order = remoteOrder.asOrder().bind()
+                    orderService.createOrder(order).bind().asRemoteOrder()
                 }
-                respond(HttpStatusCode.OK, res)
+                respond(HttpStatusCode.Created, res)
             }
 
             get {
@@ -45,9 +45,11 @@ fun Application.orderRoutes(
     }
 }
 
-private suspend inline fun <reified A : Any> PipelineContext<Unit, ApplicationCall>.receiveCatching(): Either<Throwable, A> {
+private suspend inline fun <reified A : Any> PipelineContext<Unit, ApplicationCall>.receiveCatching(): Either<DomainError, A> {
     return Either.catch {
         call.receive<A>()
+    }.mapLeft { e ->
+        Unexpected(e.message ?: "Received malformed JSON for ${A::class.simpleName}")
     }
 }
 
@@ -59,6 +61,7 @@ data class RemoteDish(
 
 @Serializable
 data class RemoteOrder(
+    @Transient val id: String? = null,
     val table: Int,
     val createdAt: Instant = Clock.System.now(),
     val dishes: List<RemoteDish>,
@@ -69,9 +72,27 @@ private fun RemoteDish.asDish() = Dish(
     quantity = quantity,
 )
 
-private fun RemoteOrder.asOrder() = Order(
-    id = UUID.randomUUID().toString(),
+private fun RemoteOrder.asOrder(): Either<DomainError, Order> {
+    return Either.catch {
+        Order(
+            id = id,
+            table = table,
+            createdAt = createdAt,
+            dishes = dishes.map(RemoteDish::asDish).toNonEmptyListOrNull() ?: throw Throwable()
+        )
+    }.mapLeft {
+        Unexpected("Dishes cannot be an empty list")
+    }
+}
+
+private fun Dish.asRemoteDish() = RemoteDish(
+    name = name,
+    quantity = quantity,
+)
+
+private fun Order.asRemoteOrder() = RemoteOrder(
+    id = id,
     table = table,
     createdAt = createdAt,
-    dishes = dishes.map(RemoteDish::asDish).toNonEmptyListOrNull() ?: throw Throwable("Dishes cannot be an empty list")
+    dishes = dishes.map(Dish::asRemoteDish)
 )

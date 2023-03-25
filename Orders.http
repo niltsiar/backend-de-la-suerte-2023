@@ -1,10 +1,35 @@
-### Send POST request
+### Send order with empty dishes
 POST http://localhost:8080/orders
 Content-Type: application/json
 
+{
+"table": 1,
+"dishes": []
+}
+
 > {%
 client.test("Request executed successfully", function () {
-client.assert(response.status === 201, "Response status is not 201");
+client.assert(response.status === 422, "Response status is 422");
+});
+%}
+
+### Send correct order
+POST http://localhost:8080/orders
+Content-Type: application/json
+
+{
+"table": 1,
+"dishes": [
+{
+"name": "Test dish",
+"quantity": 2
+}
+]
+}
+
+> {%
+client.test("Request executed successfully", function () {
+client.assert(response.status === 201, "Response status is 201");
 });
 %}
 

@@ -1,14 +1,18 @@
 package dev.niltsiar.luckybackend.repo
 
+import arrow.core.Either
 import arrow.core.toNonEmptyListOrNull
+import dev.niltsiar.luckybackend.domain.OrderCreationError
+import dev.niltsiar.luckybackend.domain.PersistenceError
 import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
 import java.io.File
+import java.util.UUID
 import kotlinx.datetime.Instant
 
 interface OrderPersistence {
 
-    suspend fun saveOrder(order: Order)
+    suspend fun saveOrder(order: Order): Either<PersistenceError, Order>
     suspend fun getLastOrder(): Order
 }
 
@@ -17,9 +21,15 @@ fun OrderPersistence(): OrderPersistence {
 
         private val STORAGE_FILE = "orders.menu"
 
-        override suspend fun saveOrder(order: Order) {
-            val file = File(STORAGE_FILE)
-            file.appendText("${order.serialize()}${System.lineSeparator()}")
+        override suspend fun saveOrder(order: Order): Either<PersistenceError, Order> {
+            return Either.catch {
+                val createdOrder = order.copy(id = UUID.randomUUID().toString())
+                val file = File(STORAGE_FILE)
+                file.appendText("${createdOrder.serialize()}${System.lineSeparator()}")
+                createdOrder
+            }.mapLeft { e ->
+                OrderCreationError(e.message.orEmpty())
+            }
         }
 
         override suspend fun getLastOrder(): Order {
