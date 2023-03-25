@@ -3,7 +3,7 @@ package dev.niltsiar.luckybackend.repo
 import arrow.core.Either
 import arrow.core.NonEmptyList
 import arrow.core.continuations.either
-import arrow.core.flatten
+import arrow.core.right
 import arrow.core.sequence
 import arrow.core.toNonEmptyListOrNull
 import dev.niltsiar.luckybackend.domain.OrderCreationError
@@ -13,6 +13,7 @@ import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
 import java.io.File
 import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Instant
 
 interface OrderPersistence {
@@ -24,7 +25,25 @@ interface OrderPersistence {
 fun OrderPersistence(): OrderPersistence {
     return object : OrderPersistence {
 
+        private val orders = mutableListOf<Order>()
+        private val orderComparator = Comparator<Order> { o1, o2 -> o1.createdAt.compareTo(o2.createdAt) }
+
         private val STORAGE_FILE = "orders.menu"
+
+        init {
+            runBlocking {
+                val file = File(STORAGE_FILE)
+                val loadedOrders = file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }.sequence()
+                loadedOrders
+                    .onRight {
+                        orders.addAll(it)
+                        orders.sortWith(orderComparator)
+                    }
+                    .onLeft {
+                        file.delete()
+                    }
+            }
+        }
 
         override suspend fun saveOrder(order: Order): Either<PersistenceError, Order> {
             return Either.catch {
@@ -32,21 +51,16 @@ fun OrderPersistence(): OrderPersistence {
                 val file = File(STORAGE_FILE)
                 file.appendText("${createdOrder.serialize()}${System.lineSeparator()}")
                 createdOrder
+            }.onRight { createdOrder ->
+                orders.add(createdOrder)
+                orders.sortWith(orderComparator)
             }.mapLeft { e ->
                 OrderCreationError(e.message.orEmpty())
             }
         }
 
         override suspend fun getOrders(): Either<PersistenceError, List<Order>> {
-            return Either.catch {
-                val file = File(STORAGE_FILE)
-                val orders = file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }
-                orders.sequence()
-            }
-                .mapLeft {
-                    OrderRetrievalError("Error loading orders")
-                }
-                .flatten()
+            return orders.right()
         }
     }
 }
@@ -102,9 +116,13 @@ private fun StringBuilder.appendField(tag: String, value: String, fieldSeparator
 
 private suspend fun Order.Companion.deserialize(serializedOrder: String): Either<PersistenceError, Order> {
     return either {
-        val parts = serializedOrder.split(ORDER_FIELD_SEPARATOR).associate { field ->
-            val (tag, value) = field.split("=", limit = 2)
-            tag to value
+        val parts = try {
+            serializedOrder.split(ORDER_FIELD_SEPARATOR).associate { field ->
+                val (tag, value) = field.split("=", limit = 2)
+                tag to value
+            }
+        } catch (_: Throwable) {
+            shift(OrderRetrievalError("Error loading order"))
         }
 
         val id = parts[ID_TAG] ?: shift(OrderRetrievalError("Order id cannot be null"))
