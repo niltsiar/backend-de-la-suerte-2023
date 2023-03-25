@@ -13,7 +13,6 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
-import io.ktor.server.response.respond
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -39,7 +38,7 @@ fun Application.orderRoutes(
             }
 
             get {
-                call.respond(HttpStatusCode.OK, orderService.getLastOrder().toString())
+                respond(HttpStatusCode.OK, orderService.getOrders().map { it.map(Order::asRemoteOrder) })
             }
         }
     }

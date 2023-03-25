@@ -3,7 +3,6 @@ package dev.niltsiar.luckybackend.service
 import arrow.core.Either
 import arrow.core.NonEmptyList
 import arrow.core.continuations.either
-import arrow.core.right
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.OrderAlreadyExists
 import dev.niltsiar.luckybackend.repo.OrderPersistence
@@ -30,7 +29,7 @@ data class Dish(
 interface OrderService {
 
     suspend fun createOrder(order: Order): Either<DomainError, Order>
-    suspend fun getLastOrder(): Either<Throwable, Order>
+    suspend fun getOrders(): Either<DomainError, List<Order>>
 }
 
 fun OrderService(
@@ -45,8 +44,8 @@ fun OrderService(
             }
         }
 
-        override suspend fun getLastOrder(): Either<Throwable, Order> {
-            return orderPersistence.getLastOrder().right()
+        override suspend fun getOrders(): Either<DomainError, List<Order>> {
+            return orderPersistence.getOrders()
         }
     }
 }

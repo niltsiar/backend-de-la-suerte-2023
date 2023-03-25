@@ -1,8 +1,13 @@
 package dev.niltsiar.luckybackend.repo
 
 import arrow.core.Either
+import arrow.core.NonEmptyList
+import arrow.core.continuations.either
+import arrow.core.flatten
+import arrow.core.sequence
 import arrow.core.toNonEmptyListOrNull
 import dev.niltsiar.luckybackend.domain.OrderCreationError
+import dev.niltsiar.luckybackend.domain.OrderRetrievalError
 import dev.niltsiar.luckybackend.domain.PersistenceError
 import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
@@ -13,7 +18,7 @@ import kotlinx.datetime.Instant
 interface OrderPersistence {
 
     suspend fun saveOrder(order: Order): Either<PersistenceError, Order>
-    suspend fun getLastOrder(): Order
+    suspend fun getOrders(): Either<PersistenceError, List<Order>>
 }
 
 fun OrderPersistence(): OrderPersistence {
@@ -32,15 +37,23 @@ fun OrderPersistence(): OrderPersistence {
             }
         }
 
-        override suspend fun getLastOrder(): Order {
-            val file = File(STORAGE_FILE)
-            return Order.deserialize(file.readLines().last())
+        override suspend fun getOrders(): Either<PersistenceError, List<Order>> {
+            return Either.catch {
+                val file = File(STORAGE_FILE)
+                val orders = file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }
+                orders.sequence()
+            }
+                .mapLeft {
+                    OrderRetrievalError("Error loading orders")
+                }
+                .flatten()
         }
     }
 }
 
 private const val ORDER_FIELD_SEPARATOR = "✂️"
 private const val DISH_FIELD_SEPARATOR = "🥢"
+private const val DISH_SEPARATOR = "🥡"
 private const val ID_TAG = "🆔"
 private const val CREATED_AT_TAG = "⏱"
 private const val TABLE_TAG = "🪑"
@@ -54,7 +67,7 @@ private fun Order.serialize(): String {
             appendOrderField(ID_TAG, id.toString())
             appendOrderField(TABLE_TAG, table.toString())
             appendOrderField(CREATED_AT_TAG, createdAt.toString())
-            val serializedDishes = dishes.joinToString { it.serialize() }
+            val serializedDishes = dishes.joinToString(separator = DISH_SEPARATOR) { it.serialize() }
             appendOrderField(DISHES_TAG, serializedDishes)
         }
         .removePrefix(ORDER_FIELD_SEPARATOR)
@@ -87,18 +100,59 @@ private fun StringBuilder.appendField(tag: String, value: String, fieldSeparator
     }
 }
 
-private fun Order.Companion.deserialize(serializedOrder: String): Order {
-    val parts = serializedOrder.split(ORDER_FIELD_SEPARATOR).associate { field ->
-        val (tag, value) = field.split("=")
-        tag to value
-    }
+private suspend fun Order.Companion.deserialize(serializedOrder: String): Either<PersistenceError, Order> {
+    return either {
+        val parts = serializedOrder.split(ORDER_FIELD_SEPARATOR).associate { field ->
+            val (tag, value) = field.split("=", limit = 2)
+            tag to value
+        }
 
-    val id = parts[ID_TAG] ?: throw IllegalArgumentException()
-    val createdAt = parts[CREATED_AT_TAG] ?: throw IllegalArgumentException()
-    return Order(
-        id = id,
-        createdAt = Instant.parse(createdAt),
-        table = 0,
-        dishes = emptyList<Dish>().toNonEmptyListOrNull()!!,
-    )
+        val id = parts[ID_TAG] ?: shift(OrderRetrievalError("Order id cannot be null"))
+        val table = parts[TABLE_TAG] ?: shift(OrderRetrievalError("Table cannot be null"))
+        val createdAt = parts[CREATED_AT_TAG] ?: shift(OrderRetrievalError("Creation date cannot be null"))
+        val serializedDished = parts[DISHES_TAG] ?: shift(OrderRetrievalError("Dishes cannot be null"))
+        val dishes = Dish.deserializeDishes(serializedDished).bind()
+
+        try {
+            Order(
+                id = id,
+                createdAt = Instant.parse(createdAt),
+                table = table.toInt(),
+                dishes = dishes,
+            )
+        } catch (_: Throwable) {
+            shift(OrderRetrievalError("Error loading order"))
+        }
+    }
+}
+
+private suspend fun Dish.Companion.deserializeDishes(serializedDishes: String): Either<PersistenceError, NonEmptyList<Dish>> {
+    return either {
+        val dishes = serializedDishes.split(DISH_SEPARATOR)
+        dishes.map { Dish.deserializeDish(it) }
+            .sequence()
+            .map { it.toNonEmptyListOrNull() ?: shift(OrderRetrievalError("Dishes cannot be an empty list")) }
+            .bind()
+    }
+}
+
+private suspend fun Dish.Companion.deserializeDish(serializedDish: String): Either<PersistenceError, Dish> {
+    return either {
+        val parts = serializedDish.split(DISH_FIELD_SEPARATOR).associate { field ->
+            val (tag, value) = field.split("=")
+            tag to value
+        }
+
+        val name = parts[DISH_NAME_TAG] ?: shift(OrderRetrievalError("Dish name should not be null"))
+        val quantity = parts[QUANTITY_TAG] ?: shift(OrderRetrievalError("Dish quantity should not be null"))
+
+        try {
+            Dish(
+                name = name,
+                quantity = quantity.toInt()
+            )
+        } catch (e: Throwable) {
+            shift(OrderRetrievalError("Error loading dish"))
+        }
+    }
 }
