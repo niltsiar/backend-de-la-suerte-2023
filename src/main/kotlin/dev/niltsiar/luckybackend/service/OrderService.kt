@@ -1,12 +1,22 @@
 package dev.niltsiar.luckybackend.service
 
+import arrow.core.NonEmptyList
 import dev.niltsiar.luckybackend.repo.OrderPersistence
-import java.time.Instant
-import java.util.UUID
+import kotlinx.datetime.Instant
 
 data class Order(
     val id: String,
+    val table: Int,
     val createdAt: Instant,
+    val dishes: NonEmptyList<Dish>,
+) {
+
+    companion object
+}
+
+data class Dish(
+    val name: String,
+    val quantity: Int,
 ) {
 
     companion object
@@ -24,11 +34,7 @@ fun OrderService(
     return object : OrderService {
 
         override suspend fun createOrder() {
-            val newOrder = Order(
-                id = UUID.randomUUID().toString(),
-                createdAt = Instant.now(),
-            )
-            orderPersistence.saveOrder(newOrder)
+
         }
 
         override suspend fun getLastOrder(): Order {

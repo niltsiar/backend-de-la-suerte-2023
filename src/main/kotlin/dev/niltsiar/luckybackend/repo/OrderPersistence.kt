@@ -1,8 +1,10 @@
 package dev.niltsiar.luckybackend.repo
 
+import arrow.core.toNonEmptyListOrNull
+import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
 import java.io.File
-import java.time.Instant
+import kotlinx.datetime.Instant
 
 interface OrderPersistence {
 
@@ -49,5 +51,7 @@ private fun Order.Companion.deserialize(serializedOrder: String): Order {
     return Order(
         id = id,
         createdAt = Instant.parse(createdAt),
+        table = 0,
+        dishes = emptyList<Dish>().toNonEmptyListOrNull()!!,
     )
 }
