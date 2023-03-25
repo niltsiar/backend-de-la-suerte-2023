@@ -39,19 +39,56 @@ fun OrderPersistence(): OrderPersistence {
     }
 }
 
-private const val FIELD_SEPARATOR = "✂️"
+private const val ORDER_FIELD_SEPARATOR = "✂️"
+private const val DISH_FIELD_SEPARATOR = "🥢"
 private const val ID_TAG = "🆔"
 private const val CREATED_AT_TAG = "⏱"
+private const val TABLE_TAG = "🪑"
+private const val DISHES_TAG = "📃"
+private const val DISH_NAME_TAG = "🍽"
+private const val QUANTITY_TAG = "🔢"
+
 private fun Order.serialize(): String {
     return StringBuilder()
-        .append("$ID_TAG=").append(id).append(FIELD_SEPARATOR)
-        .append("$CREATED_AT_TAG=").append(createdAt)
+        .apply {
+            appendOrderField(ID_TAG, id.toString())
+            appendOrderField(TABLE_TAG, table.toString())
+            appendOrderField(CREATED_AT_TAG, createdAt.toString())
+            val serializedDishes = dishes.joinToString { it.serialize() }
+            appendOrderField(DISHES_TAG, serializedDishes)
+        }
+        .removePrefix(ORDER_FIELD_SEPARATOR)
         .toString()
+}
 
+private fun Dish.serialize(): String {
+    return StringBuilder()
+        .apply {
+            appendDishField(DISH_NAME_TAG, name)
+            appendDishField(QUANTITY_TAG, quantity.toString())
+        }
+        .removePrefix(DISH_FIELD_SEPARATOR)
+        .toString()
+}
+
+private fun StringBuilder.appendOrderField(tag: String, value: String): StringBuilder {
+    return appendField(tag, value, ORDER_FIELD_SEPARATOR)
+}
+
+private fun StringBuilder.appendDishField(tag: String, value: String): StringBuilder {
+    return appendField(tag, value, DISH_FIELD_SEPARATOR)
+}
+
+private fun StringBuilder.appendField(tag: String, value: String, fieldSeparator: String): StringBuilder {
+    return apply {
+        append(fieldSeparator)
+        append("$tag=")
+        append(value)
+    }
 }
 
 private fun Order.Companion.deserialize(serializedOrder: String): Order {
-    val parts = serializedOrder.split(FIELD_SEPARATOR).associate { field ->
+    val parts = serializedOrder.split(ORDER_FIELD_SEPARATOR).associate { field ->
         val (tag, value) = field.split("=")
         tag to value
     }
