@@ -28,10 +28,10 @@ tasks {
 }
 
 dependencies {
+    implementation(libs.kotlinx.serialization)
+    implementation(libs.kotlinx.datetime)
     implementation(libs.bundles.ktor.server)
     implementation(libs.logback.classic)
     implementation(libs.bundles.arrow)
     implementation(libs.bundles.suspendapp)
-    implementation("org.fusesource.jansi:jansi:2.4.0")
-
 }
