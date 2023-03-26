@@ -116,14 +116,14 @@ private fun StringBuilder.appendField(tag: String, value: String, fieldSeparator
 
 private suspend fun Order.Companion.deserialize(serializedOrder: String): Either<PersistenceError, Order> {
     return either {
-        val parts = try {
+        val parts = Either.catch {
             serializedOrder.split(ORDER_FIELD_SEPARATOR).associate { field ->
                 val (tag, value) = field.split("=", limit = 2)
                 tag to value
             }
-        } catch (_: Throwable) {
-            shift(OrderRetrievalError("Error loading order"))
-        }
+        }.mapLeft {
+            OrderRetrievalError("Error loading order")
+        }.bind()
 
         val id = parts[ID_TAG] ?: shift(OrderRetrievalError("Order id cannot be null"))
         val table = parts[TABLE_TAG] ?: shift(OrderRetrievalError("Table cannot be null"))
@@ -131,16 +131,16 @@ private suspend fun Order.Companion.deserialize(serializedOrder: String): Either
         val serializedDished = parts[DISHES_TAG] ?: shift(OrderRetrievalError("Dishes cannot be null"))
         val dishes = Dish.deserializeDishes(serializedDished).bind()
 
-        try {
+        Either.catch {
             Order(
                 id = id,
                 createdAt = Instant.parse(createdAt),
                 table = table.toInt(),
                 dishes = dishes,
             )
-        } catch (_: Throwable) {
-            shift(OrderRetrievalError("Error loading order"))
-        }
+        }.mapLeft {
+            OrderRetrievalError("Error loading order")
+        }.bind()
     }
 }
 
@@ -156,21 +156,25 @@ private suspend fun Dish.Companion.deserializeDishes(serializedDishes: String): 
 
 private suspend fun Dish.Companion.deserializeDish(serializedDish: String): Either<PersistenceError, Dish> {
     return either {
-        val parts = serializedDish.split(DISH_FIELD_SEPARATOR).associate { field ->
-            val (tag, value) = field.split("=")
-            tag to value
-        }
+        val parts = Either.catch {
+            serializedDish.split(DISH_FIELD_SEPARATOR).associate { field ->
+                val (tag, value) = field.split("=")
+                tag to value
+            }
+        }.mapLeft {
+            OrderRetrievalError("Error loading dish")
+        }.bind()
 
         val name = parts[DISH_NAME_TAG] ?: shift(OrderRetrievalError("Dish name should not be null"))
         val quantity = parts[QUANTITY_TAG] ?: shift(OrderRetrievalError("Dish quantity should not be null"))
 
-        try {
+        Either.catch {
             Dish(
                 name = name,
                 quantity = quantity.toInt()
             )
-        } catch (e: Throwable) {
-            shift(OrderRetrievalError("Error loading dish"))
-        }
+        }.mapLeft {
+            OrderRetrievalError("Error loading dish")
+        }.bind()
     }
 }
