@@ -5,6 +5,7 @@ import arrow.core.NonEmptyList
 import arrow.core.continuations.either
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.OrderAlreadyExists
+import dev.niltsiar.luckybackend.domain.OrderNotFound
 import dev.niltsiar.luckybackend.repo.OrderPersistence
 import kotlinx.datetime.Instant
 
@@ -12,6 +13,7 @@ data class Order(
     val id: String?,
     val table: Int,
     val createdAt: Instant,
+    val dispatchedAt: Instant?,
     val dishes: NonEmptyList<Dish>,
 ) {
 
@@ -31,6 +33,8 @@ interface OrderService {
     suspend fun createOrder(order: Order): Either<DomainError, Order>
     suspend fun getOrders(): Either<DomainError, List<Order>>
     suspend fun clearOrders(): Either<DomainError, Unit>
+
+    suspend fun dispatchOrder(orderId: String): Either<DomainError, Unit>
 }
 
 fun OrderService(
@@ -51,6 +55,11 @@ fun OrderService(
 
         override suspend fun clearOrders(): Either<DomainError, Unit> {
             return orderPersistence.clearOrders()
+        }
+
+        override suspend fun dispatchOrder(orderId: String): Either<DomainError, Unit> {
+            return orderPersistence.dispatchOrder(orderId)
+                .mapLeft { OrderNotFound(orderId) }
         }
     }
 }

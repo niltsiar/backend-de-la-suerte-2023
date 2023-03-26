@@ -4,6 +4,7 @@ sealed interface DomainError
 
 sealed interface ServiceError : DomainError
 data class OrderAlreadyExists(val orderId: String) : ServiceError
+data class OrderNotFound(val orderId: String) : ServiceError
 
 sealed interface PersistenceError : DomainError {
 
@@ -17,3 +18,4 @@ data class OrderDispatchError(override val description: String) : PersistenceErr
 
 sealed interface NetworkError : DomainError
 data class Unexpected(val description: String) : NetworkError
+data class IllegalArgument(val description: String) : NetworkError

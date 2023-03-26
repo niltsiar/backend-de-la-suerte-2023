@@ -2,8 +2,10 @@ package dev.niltsiar.luckybackend.routes
 
 import arrow.core.Either
 import arrow.core.continuations.either
+import arrow.core.continuations.ensureNotNull
 import arrow.core.toNonEmptyListOrNull
 import dev.niltsiar.luckybackend.domain.DomainError
+import dev.niltsiar.luckybackend.domain.IllegalArgument
 import dev.niltsiar.luckybackend.domain.Unexpected
 import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
@@ -44,6 +46,15 @@ fun Application.orderRoutes(
         get("/clear") {
             respond(HttpStatusCode.OK, orderService.clearOrders())
         }
+
+        get("/dispatch/{orderId}") {
+            val res = either {
+                val orderId = call.parameters["orderId"]
+                ensureNotNull(orderId) { IllegalArgument("Order Id cannot be null") }
+                orderService.dispatchOrder(orderId).bind()
+            }
+            respond(HttpStatusCode.OK, res)
+        }
     }
 }
 
@@ -66,6 +77,7 @@ data class RemoteOrder(
     @Transient val id: String? = null,
     val table: Int,
     val createdAt: Instant = Clock.System.now(),
+    val dispatchedAt: Instant? = null,
     val dishes: List<RemoteDish>,
 )
 
@@ -80,6 +92,7 @@ private fun RemoteOrder.asOrder(): Either<DomainError, Order> {
             id = id,
             table = table,
             createdAt = createdAt,
+            dispatchedAt = dispatchedAt,
             dishes = dishes.map(RemoteDish::asDish).toNonEmptyListOrNull() ?: throw Throwable()
         )
     }.mapLeft {

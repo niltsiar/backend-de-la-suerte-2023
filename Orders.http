@@ -76,3 +76,13 @@ client.test("Request executed successfully", function () {
 client.assert(response.status === 201, "Response status is not 201");
 });
 %}
+
+### Dispatch order
+GET http://localhost:8080/dispatch/ORDER_ID_HERE
+Content-Type: application/json
+
+> {%
+client.test("Request executed successfully", function () {
+client.assert(response.status === 200, "Response status is not 200");
+});
+%}

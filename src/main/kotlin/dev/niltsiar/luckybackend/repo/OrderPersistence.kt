@@ -17,6 +17,7 @@ import dev.niltsiar.luckybackend.service.Order
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.runBlocking
+import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
 interface OrderPersistence {
@@ -24,6 +25,8 @@ interface OrderPersistence {
     suspend fun saveOrder(order: Order): Either<PersistenceError, Order>
     suspend fun getOrders(): Either<PersistenceError, List<Order>>
     suspend fun clearOrders(): Either<PersistenceError, Unit>
+
+    suspend fun dispatchOrder(orderId: String): Either<PersistenceError, Unit>
 }
 
 fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
@@ -91,6 +94,23 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
                 OrderDispatchError("Error dispatching orders")
             }
         }
+
+        override suspend fun dispatchOrder(orderId: String): Either<PersistenceError, Unit> {
+            return either {
+                val order = orders.firstOrNull { it.id == orderId } ?: shift(OrderRetrievalError(orderId))
+                Either.catch {
+                    val file = File(STORAGE_FILE)
+                    file.delete()
+                    orders.remove(order)
+                    orders.add(order.copy(dispatchedAt = Clock.System.now()))
+                    orders.forEach { currentOrder ->
+                        file.appendText("${currentOrder.serialize()}${System.lineSeparator()}")
+                    }
+                }.mapLeft {
+                    OrderDispatchError("Error dispatching orders")
+                }.bind()
+            }
+        }
     }
 }
 
@@ -99,6 +119,7 @@ private const val DISH_FIELD_SEPARATOR = "🥢"
 private const val DISH_SEPARATOR = "🥡"
 private const val ID_TAG = "🆔"
 private const val CREATED_AT_TAG = "⏱"
+private const val DISPATCHED_AT_TAG = "⏲"
 private const val TABLE_TAG = "🪑"
 private const val DISHES_TAG = "📃"
 private const val DISH_NAME_TAG = "🍽"
@@ -110,6 +131,7 @@ private fun Order.serialize(): String {
             appendOrderField(ID_TAG, id.toString())
             appendOrderField(TABLE_TAG, table.toString())
             appendOrderField(CREATED_AT_TAG, createdAt.toString())
+            dispatchedAt?.let { appendOrderField(DISPATCHED_AT_TAG, dispatchedAt.toString()) }
             val serializedDishes = dishes.joinToString(separator = DISH_SEPARATOR) { it.serialize() }
             appendOrderField(DISHES_TAG, serializedDishes)
         }
@@ -157,6 +179,7 @@ private suspend fun Order.Companion.deserialize(serializedOrder: String): Either
         val id = parts[ID_TAG] ?: shift(OrderRetrievalError("Order id cannot be null"))
         val table = parts[TABLE_TAG] ?: shift(OrderRetrievalError("Table cannot be null"))
         val createdAt = parts[CREATED_AT_TAG] ?: shift(OrderRetrievalError("Creation date cannot be null"))
+        val dispatchedAt = parts[DISPATCHED_AT_TAG]
         val serializedDished = parts[DISHES_TAG] ?: shift(OrderRetrievalError("Dishes cannot be null"))
         val dishes = Dish.deserializeDishes(serializedDished).bind()
 
@@ -164,6 +187,7 @@ private suspend fun Order.Companion.deserialize(serializedOrder: String): Either
             Order(
                 id = id,
                 createdAt = Instant.parse(createdAt),
+                dispatchedAt = dispatchedAt?.let { Instant.parse(it) },
                 table = table.toInt(),
                 dishes = dishes,
             )
