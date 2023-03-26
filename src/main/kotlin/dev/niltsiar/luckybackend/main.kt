@@ -26,7 +26,7 @@ fun main() = SuspendApp {
 
 fun Application.app() {
     configure()
-    orderRoutes(OrderService(OrderPersistence()))
+    orderRoutes(OrderService(OrderPersistence(maxPendingOrders = 5)))
 }
 
 fun Application.configure() {

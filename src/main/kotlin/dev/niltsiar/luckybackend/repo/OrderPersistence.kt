@@ -3,9 +3,11 @@ package dev.niltsiar.luckybackend.repo
 import arrow.core.Either
 import arrow.core.NonEmptyList
 import arrow.core.continuations.either
+import arrow.core.left
 import arrow.core.right
 import arrow.core.sequence
 import arrow.core.toNonEmptyListOrNull
+import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
 import dev.niltsiar.luckybackend.domain.OrderCreationError
 import dev.niltsiar.luckybackend.domain.OrderRetrievalError
 import dev.niltsiar.luckybackend.domain.PersistenceError
@@ -22,7 +24,7 @@ interface OrderPersistence {
     suspend fun getOrders(): Either<PersistenceError, List<Order>>
 }
 
-fun OrderPersistence(): OrderPersistence {
+fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
     return object : OrderPersistence {
 
         private val orders = mutableListOf<Order>()
@@ -46,6 +48,9 @@ fun OrderPersistence(): OrderPersistence {
         }
 
         override suspend fun saveOrder(order: Order): Either<PersistenceError, Order> {
+            if (orders.size >= maxPendingOrders) {
+                return MaxNumberOfOrders("No more than $maxPendingOrders pending orders allowed").left()
+            }
             return Either.catch {
                 val createdOrder = order.copy(id = UUID.randomUUID().toString())
                 val file = File(STORAGE_FILE)
