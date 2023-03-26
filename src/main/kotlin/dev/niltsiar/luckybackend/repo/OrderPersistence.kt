@@ -9,6 +9,7 @@ import arrow.core.sequence
 import arrow.core.toNonEmptyListOrNull
 import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
 import dev.niltsiar.luckybackend.domain.OrderCreationError
+import dev.niltsiar.luckybackend.domain.OrderDispatchError
 import dev.niltsiar.luckybackend.domain.OrderRetrievalError
 import dev.niltsiar.luckybackend.domain.PersistenceError
 import dev.niltsiar.luckybackend.service.Dish
@@ -22,6 +23,7 @@ interface OrderPersistence {
 
     suspend fun saveOrder(order: Order): Either<PersistenceError, Order>
     suspend fun getOrders(): Either<PersistenceError, List<Order>>
+    suspend fun clearOrders(): Either<PersistenceError, Unit>
 }
 
 fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
@@ -66,6 +68,18 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
 
         override suspend fun getOrders(): Either<PersistenceError, List<Order>> {
             return orders.right()
+        }
+
+        override suspend fun clearOrders(): Either<PersistenceError, Unit> {
+            return Either.catch {
+                val file = File(STORAGE_FILE)
+                file.delete()
+                Unit
+            }.onRight {
+                orders.clear()
+            }.mapLeft {
+                OrderDispatchError("Error dispatching orders")
+            }
         }
     }
 }

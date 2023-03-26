@@ -30,6 +30,7 @@ interface OrderService {
 
     suspend fun createOrder(order: Order): Either<DomainError, Order>
     suspend fun getOrders(): Either<DomainError, List<Order>>
+    suspend fun clearOrders(): Either<DomainError, Unit>
 }
 
 fun OrderService(
@@ -46,6 +47,10 @@ fun OrderService(
 
         override suspend fun getOrders(): Either<DomainError, List<Order>> {
             return orderPersistence.getOrders()
+        }
+
+        override suspend fun clearOrders(): Either<DomainError, Unit> {
+            return orderPersistence.clearOrders()
         }
     }
 }

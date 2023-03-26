@@ -13,6 +13,7 @@ sealed interface PersistenceError : DomainError {
 data class OrderCreationError(override val description: String) : PersistenceError
 data class OrderRetrievalError(override val description: String) : PersistenceError
 data class MaxNumberOfOrders(override val description: String) : PersistenceError
+data class OrderDispatchError(override val description: String) : PersistenceError
 
 sealed interface NetworkError : DomainError
 data class Unexpected(val description: String) : NetworkError

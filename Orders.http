@@ -9,7 +9,7 @@ Content-Type: application/json
 
 > {%
 client.test("Request executed successfully", function () {
-client.assert(response.status === 422, "Response status is 422");
+client.assert(response.status === 422, "Response status is not 422");
 });
 %}
 
@@ -33,12 +33,22 @@ Content-Type: application/json
 
 > {%
 client.test("Request executed successfully", function () {
-client.assert(response.status === 201, "Response status is 201");
+client.assert(response.status === 201, "Response status is not 201");
 });
 %}
 
 ### Get all orders
 GET http://localhost:8080/orders
+Content-Type: application/json
+
+> {%
+client.test("Request executed successfully", function () {
+client.assert(response.status === 200, "Response status is not 200");
+});
+%}
+
+### Clear all orders
+GET http://localhost:8080/clear
 Content-Type: application/json
 
 > {%

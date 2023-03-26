@@ -41,6 +41,9 @@ fun Application.orderRoutes(
                 respond(HttpStatusCode.OK, orderService.getOrders().map { it.map(Order::asRemoteOrder) })
             }
         }
+        get("/clear") {
+            respond(HttpStatusCode.OK, orderService.clearOrders())
+        }
     }
 }
 

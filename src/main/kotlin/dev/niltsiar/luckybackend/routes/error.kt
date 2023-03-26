@@ -4,6 +4,7 @@ import arrow.core.Either
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
 import dev.niltsiar.luckybackend.domain.OrderCreationError
+import dev.niltsiar.luckybackend.domain.OrderDispatchError
 import dev.niltsiar.luckybackend.domain.OrderRetrievalError
 import dev.niltsiar.luckybackend.domain.PersistenceError
 import dev.niltsiar.luckybackend.domain.ServiceError
@@ -32,6 +33,7 @@ private suspend fun PipelineContext<Unit, ApplicationCall>.respond(error: Persis
         is MaxNumberOfOrders -> call.respond(HttpStatusCode.InsufficientStorage, error.description)
         is OrderCreationError -> unprocessable(error.description)
         is OrderRetrievalError -> unprocessable(error.description)
+        is OrderDispatchError -> call.respond(HttpStatusCode.InternalServerError, error.description)
     }
 
 private suspend fun PipelineContext<Unit, ApplicationCall>.unprocessable(error: String): Unit =
