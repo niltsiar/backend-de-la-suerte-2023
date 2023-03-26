@@ -1,6 +1,7 @@
 package dev.niltsiar.luckybackend.routes
 
 import arrow.core.Either
+import dev.niltsiar.luckybackend.KtorCtx
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.IllegalArgument
 import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
@@ -14,12 +15,10 @@ import dev.niltsiar.luckybackend.domain.PersistenceError
 import dev.niltsiar.luckybackend.domain.ServiceError
 import dev.niltsiar.luckybackend.domain.Unexpected
 import io.ktor.http.HttpStatusCode
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.response.respond
-import io.ktor.util.pipeline.PipelineContext
 
-suspend inline fun <reified A : Any> PipelineContext<Unit, ApplicationCall>.respond(status: HttpStatusCode, either: Either<DomainError, A>): Unit =
+suspend inline fun <reified A : Any> KtorCtx.respond(status: HttpStatusCode, either: Either<DomainError, A>): Unit =
     when (either) {
         is Either.Left -> respond(either.value)
         is Either.Right -> {
@@ -31,20 +30,20 @@ suspend inline fun <reified A : Any> PipelineContext<Unit, ApplicationCall>.resp
         }
     }
 
-suspend fun PipelineContext<Unit, ApplicationCall>.respond(error: DomainError): Unit =
+suspend fun KtorCtx.respond(error: DomainError): Unit =
     when (error) {
         is ServiceError -> call.respond(HttpStatusCode.Conflict)
         is PersistenceError -> respond(error)
         is NetworkError -> respond(error)
     }
 
-private suspend fun PipelineContext<Unit, ApplicationCall>.respond(error: ServiceError): Unit =
+private suspend fun KtorCtx.respond(error: ServiceError): Unit =
     when (error) {
         is OrderAlreadyExists -> call.respond(HttpStatusCode.Conflict)
         is OrderNotFound -> call.respond(HttpStatusCode.NotFound)
     }
 
-private suspend fun PipelineContext<Unit, ApplicationCall>.respond(error: PersistenceError): Unit =
+private suspend fun KtorCtx.respond(error: PersistenceError): Unit =
     when (error) {
         is MaxNumberOfOrders -> call.respond(HttpStatusCode.InsufficientStorage, error.description)
         is OrderCreationError -> unprocessable(error.description)
@@ -52,11 +51,11 @@ private suspend fun PipelineContext<Unit, ApplicationCall>.respond(error: Persis
         is OrderDispatchError -> call.respond(HttpStatusCode.InternalServerError, error.description)
     }
 
-private suspend fun PipelineContext<Unit, ApplicationCall>.respond(error: NetworkError): Unit =
+private suspend fun KtorCtx.respond(error: NetworkError): Unit =
     when (error) {
         is IllegalArgument -> call.respond(HttpStatusCode.BadRequest, error.description)
         is Unexpected -> call.respond(HttpStatusCode.UnprocessableEntity, error.description)
     }
 
-private suspend fun PipelineContext<Unit, ApplicationCall>.unprocessable(error: String): Unit =
+private suspend fun KtorCtx.unprocessable(error: String): Unit =
     call.respond(HttpStatusCode.UnprocessableEntity, error)

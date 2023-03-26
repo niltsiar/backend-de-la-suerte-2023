@@ -24,12 +24,14 @@ fun main() = SuspendApp {
     }
 }
 
-fun Application.app() {
+private fun Application.app() {
     configure()
-    orderRoutes(OrderService(OrderPersistence(maxPendingOrders = 5)))
+    with(OrderService(OrderPersistence(maxPendingOrders = 5))) {
+        orderRoutes()
+    }
 }
 
-fun Application.configure() {
+private fun Application.configure() {
     install(ContentNegotiation) {
         json(
             Json {

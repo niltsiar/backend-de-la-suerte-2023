@@ -25,33 +25,32 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
-fun Application.orderRoutes(
-    orderService: OrderService,
-) {
+context(Application, OrderService)
+fun orderRoutes() {
     routing {
         route("/orders") {
             post {
                 val res = either<DomainError, RemoteOrder> {
                     val remoteOrder = receiveCatching<RemoteOrder>().bind()
                     val order = remoteOrder.asOrder().bind()
-                    orderService.createOrder(order).bind().asRemoteOrder()
+                    createOrder(order).bind().asRemoteOrder()
                 }
                 respond(HttpStatusCode.Created, res)
             }
 
             get {
-                respond(HttpStatusCode.OK, orderService.getOrders().map { it.map(Order::asRemoteOrder) })
+                respond(HttpStatusCode.OK, getOrders().map { it.map(Order::asRemoteOrder) })
             }
         }
         get("/clear") {
-            respond(HttpStatusCode.OK, orderService.clearOrders())
+            respond(HttpStatusCode.OK, clearOrders())
         }
 
         get("/dispatch/{orderId}") {
             val res = either {
                 val orderId = call.parameters["orderId"]
                 ensureNotNull(orderId) { IllegalArgument("Order Id cannot be null") }
-                orderService.dispatchOrder(orderId).bind()
+                dispatchOrder(orderId).bind()
             }
             respond(HttpStatusCode.OK, res)
         }
