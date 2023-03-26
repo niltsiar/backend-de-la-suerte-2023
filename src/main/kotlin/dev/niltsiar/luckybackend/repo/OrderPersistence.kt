@@ -30,22 +30,32 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
     return object : OrderPersistence {
 
         private val orders = mutableListOf<Order>()
-        private val orderComparator = Comparator<Order> { o1, o2 -> o1.createdAt.compareTo(o2.createdAt) }
+        private val orderComparator = Comparator<Order> { o1, o2 ->
+            if (o1.containsSpecialZombie() == o2.containsSpecialZombie()) {
+                o1.createdAt.compareTo(o2.createdAt)
+            } else if (o1.containsSpecialZombie()) {
+                -1
+            } else {
+                1
+            }
+        }
 
         private val STORAGE_FILE = "orders.menu"
 
         init {
             runBlocking {
-                val file = File(STORAGE_FILE)
-                val loadedOrders = file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }.sequence()
-                loadedOrders
-                    .onRight {
-                        orders.addAll(it)
-                        orders.sortWith(orderComparator)
-                    }
-                    .onLeft {
-                        file.delete()
-                    }
+                Either.catch {
+                    val file = File(STORAGE_FILE)
+                    val loadedOrders = file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }.sequence()
+                    loadedOrders
+                        .onRight {
+                            orders.addAll(it)
+                            orders.sortWith(orderComparator)
+                        }
+                        .onLeft {
+                            file.delete()
+                        }
+                }
             }
         }
 
@@ -197,3 +207,9 @@ private suspend fun Dish.Companion.deserializeDish(serializedDish: String): Eith
         }.bind()
     }
 }
+
+private const val SPECIAL_ZOMBIE = "ESPECIAL ZOMBIE"
+private val Dish.isSpecialZombie: Boolean
+    get() = name == SPECIAL_ZOMBIE
+
+private fun Order.containsSpecialZombie(): Boolean = dishes.any { dish -> dish.isSpecialZombie }
