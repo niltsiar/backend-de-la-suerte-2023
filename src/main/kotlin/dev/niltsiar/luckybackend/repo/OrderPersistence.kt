@@ -2,9 +2,8 @@ package dev.niltsiar.luckybackend.repo
 
 import arrow.core.Either
 import arrow.core.NonEmptyList
+import arrow.core.continuations.EffectScope
 import arrow.core.continuations.either
-import arrow.core.left
-import arrow.core.right
 import arrow.core.sequence
 import arrow.core.toNonEmptyListOrNull
 import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
@@ -22,11 +21,17 @@ import kotlinx.datetime.Instant
 
 interface OrderPersistence {
 
-    suspend fun saveOrder(order: Order): Either<PersistenceError, Order>
-    suspend fun getOrders(): Either<PersistenceError, List<Order>>
-    suspend fun clearOrders(): Either<PersistenceError, Unit>
+    context(EffectScope<PersistenceError>)
+    suspend fun saveOrder(order: Order): Order
 
-    suspend fun dispatchOrder(orderId: String): Either<PersistenceError, Unit>
+    context(EffectScope<PersistenceError>)
+    suspend fun getOrders(): List<Order>
+
+    context(EffectScope<PersistenceError>)
+    suspend fun clearOrders()
+
+    context(EffectScope<PersistenceError>)
+    suspend fun dispatchOrder(orderId: String)
 }
 
 fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
@@ -62,9 +67,10 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
             }
         }
 
-        override suspend fun saveOrder(order: Order): Either<PersistenceError, Order> {
-            if (orders.size >= maxPendingOrders) {
-                return MaxNumberOfOrders("No more than $maxPendingOrders pending orders allowed").left()
+        context(EffectScope<PersistenceError>)
+        override suspend fun saveOrder(order: Order): Order {
+            ensure(orders.size < maxPendingOrders) {
+                MaxNumberOfOrders("No more than $maxPendingOrders pending orders allowed")
             }
             return Either.catch {
                 val createdOrder = order.copy(id = UUID.randomUUID().toString())
@@ -76,14 +82,16 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
                 orders.sortWith(orderComparator)
             }.mapLeft { e ->
                 OrderCreationError(e.message.orEmpty())
-            }
+            }.bind()
         }
 
-        override suspend fun getOrders(): Either<PersistenceError, List<Order>> {
-            return orders.right()
+        context(EffectScope<PersistenceError>)
+        override suspend fun getOrders(): List<Order> {
+            return orders
         }
 
-        override suspend fun clearOrders(): Either<PersistenceError, Unit> {
+        context(EffectScope<PersistenceError>)
+        override suspend fun clearOrders() {
             return Either.catch {
                 val file = File(STORAGE_FILE)
                 file.delete()
@@ -92,24 +100,23 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
                 orders.clear()
             }.mapLeft {
                 OrderDispatchError("Error dispatching orders")
-            }
+            }.bind()
         }
 
-        override suspend fun dispatchOrder(orderId: String): Either<PersistenceError, Unit> {
-            return either {
-                val order = orders.firstOrNull { it.id == orderId } ?: shift(OrderRetrievalError(orderId))
-                Either.catch {
-                    val file = File(STORAGE_FILE)
-                    file.delete()
-                    orders.remove(order)
-                    orders.add(order.copy(dispatchedAt = Clock.System.now()))
-                    orders.forEach { currentOrder ->
-                        file.appendText("${currentOrder.serialize()}${System.lineSeparator()}")
-                    }
-                }.mapLeft {
-                    OrderDispatchError("Error dispatching orders")
-                }.bind()
-            }
+        context(EffectScope<PersistenceError>)
+        override suspend fun dispatchOrder(orderId: String) {
+            val order = orders.firstOrNull { it.id == orderId } ?: shift(OrderRetrievalError(orderId))
+            return Either.catch {
+                val file = File(STORAGE_FILE)
+                file.delete()
+                orders.remove(order)
+                orders.add(order.copy(dispatchedAt = Clock.System.now()))
+                orders.forEach { currentOrder ->
+                    file.appendText("${currentOrder.serialize()}${System.lineSeparator()}")
+                }
+            }.mapLeft {
+                OrderDispatchError("Error dispatching orders")
+            }.bind()
         }
     }
 }

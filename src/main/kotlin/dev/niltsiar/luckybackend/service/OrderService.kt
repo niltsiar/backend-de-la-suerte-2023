@@ -1,8 +1,8 @@
 package dev.niltsiar.luckybackend.service
 
-import arrow.core.Either
 import arrow.core.NonEmptyList
-import arrow.core.continuations.either
+import arrow.core.continuations.EffectScope
+import arrow.core.continuations.effect
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.OrderAlreadyExists
 import dev.niltsiar.luckybackend.domain.OrderNotFound
@@ -30,11 +30,17 @@ data class Dish(
 
 interface OrderService {
 
-    suspend fun createOrder(order: Order): Either<DomainError, Order>
-    suspend fun getOrders(): Either<DomainError, List<Order>>
-    suspend fun clearOrders(): Either<DomainError, Unit>
+    context(EffectScope<DomainError>)
+    suspend fun createOrder(order: Order): Order
 
-    suspend fun dispatchOrder(orderId: String): Either<DomainError, Unit>
+    context(EffectScope<DomainError>)
+    suspend fun getOrders(): List<Order>
+
+    context(EffectScope<DomainError>)
+    suspend fun clearOrders()
+
+    context(EffectScope<DomainError>)
+    suspend fun dispatchOrder(orderId: String)
 }
 
 fun OrderService(
@@ -42,24 +48,29 @@ fun OrderService(
 ): OrderService {
     return object : OrderService {
 
-        override suspend fun createOrder(order: Order): Either<DomainError, Order> {
-            return either {
-                ensure(order.id == null) { OrderAlreadyExists(order.id!!) }
-                orderPersistence.saveOrder(order).bind()
-            }
+        context(EffectScope<DomainError>)
+        override suspend fun createOrder(order: Order): Order {
+            ensure(order.id == null) { OrderAlreadyExists(order.id!!) }
+            return orderPersistence.saveOrder(order)
         }
 
-        override suspend fun getOrders(): Either<DomainError, List<Order>> {
+        context(EffectScope<DomainError>)
+        override suspend fun getOrders(): List<Order> {
             return orderPersistence.getOrders()
         }
 
-        override suspend fun clearOrders(): Either<DomainError, Unit> {
+        context(EffectScope<DomainError>)
+        override suspend fun clearOrders() {
             return orderPersistence.clearOrders()
         }
 
-        override suspend fun dispatchOrder(orderId: String): Either<DomainError, Unit> {
-            return orderPersistence.dispatchOrder(orderId)
-                .mapLeft { OrderNotFound(orderId) }
+        context(EffectScope<DomainError>)
+        override suspend fun dispatchOrder(orderId: String) {
+            return effect {
+                orderPersistence.dispatchOrder(orderId)
+            }.handleErrorWith {
+                effect { shift(OrderNotFound(orderId)) }
+            }.bind()
         }
     }
 }

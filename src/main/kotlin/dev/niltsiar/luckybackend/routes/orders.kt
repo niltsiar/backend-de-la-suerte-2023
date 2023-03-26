@@ -33,24 +33,30 @@ fun orderRoutes() {
                 val res = either<DomainError, RemoteOrder> {
                     val remoteOrder = receiveCatching<RemoteOrder>().bind()
                     val order = remoteOrder.asOrder().bind()
-                    createOrder(order).bind().asRemoteOrder()
+                    createOrder(order).asRemoteOrder()
                 }
                 respond(HttpStatusCode.Created, res)
             }
 
             get {
-                respond(HttpStatusCode.OK, getOrders().map { it.map(Order::asRemoteOrder) })
+                val res = either {
+                    getOrders().map(Order::asRemoteOrder)
+                }
+                respond(HttpStatusCode.OK, res)
             }
         }
         get("/clear") {
-            respond(HttpStatusCode.OK, clearOrders())
+            val res = either {
+                clearOrders()
+            }
+            respond(HttpStatusCode.OK, res)
         }
 
         get("/dispatch/{orderId}") {
             val res = either {
                 val orderId = call.parameters["orderId"]
                 ensureNotNull(orderId) { IllegalArgument("Order Id cannot be null") }
-                dispatchOrder(orderId).bind()
+                dispatchOrder(orderId)
             }
             respond(HttpStatusCode.OK, res)
         }
