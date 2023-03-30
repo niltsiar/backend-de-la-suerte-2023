@@ -4,6 +4,7 @@ import arrow.core.Either
 import dev.niltsiar.luckybackend.KtorCtx
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.IllegalArgument
+import dev.niltsiar.luckybackend.domain.InvalidOrderError
 import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
 import dev.niltsiar.luckybackend.domain.NetworkError
 import dev.niltsiar.luckybackend.domain.OrderAlreadyExists
@@ -41,14 +42,16 @@ private suspend fun KtorCtx.respond(error: ServiceError): Unit =
     when (error) {
         is OrderAlreadyExists -> call.respond(HttpStatusCode.Conflict)
         is OrderNotFound -> call.respond(HttpStatusCode.NotFound)
+        is MaxNumberOfOrders -> call.respond(HttpStatusCode.InsufficientStorage, error.description)
     }
 
 private suspend fun KtorCtx.respond(error: PersistenceError): Unit =
     when (error) {
-        is MaxNumberOfOrders -> call.respond(HttpStatusCode.InsufficientStorage, error.description)
         is OrderCreationError -> unprocessable(error.description)
         is OrderRetrievalError -> unprocessable(error.description)
         is OrderDispatchError -> call.respond(HttpStatusCode.InternalServerError, error.description)
+        is InvalidOrderError -> call.respond(HttpStatusCode.BadRequest)
+        is OrderNotFound -> call.respond(HttpStatusCode.NotFound)
     }
 
 private suspend fun KtorCtx.respond(error: NetworkError): Unit =

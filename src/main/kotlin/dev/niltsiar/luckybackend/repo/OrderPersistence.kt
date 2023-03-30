@@ -4,19 +4,18 @@ import arrow.core.Either
 import arrow.core.NonEmptyList
 import arrow.core.continuations.EffectScope
 import arrow.core.continuations.either
+import arrow.core.continuations.ensureNotNull
 import arrow.core.sequence
 import arrow.core.toNonEmptyListOrNull
-import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
+import dev.niltsiar.luckybackend.domain.InvalidOrderError
 import dev.niltsiar.luckybackend.domain.OrderCreationError
 import dev.niltsiar.luckybackend.domain.OrderDispatchError
+import dev.niltsiar.luckybackend.domain.OrderNotFound
 import dev.niltsiar.luckybackend.domain.OrderRetrievalError
 import dev.niltsiar.luckybackend.domain.PersistenceError
 import dev.niltsiar.luckybackend.service.Dish
 import dev.niltsiar.luckybackend.service.Order
 import java.io.File
-import java.util.UUID
-import kotlinx.coroutines.runBlocking
-import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
 interface OrderPersistence {
@@ -25,69 +24,45 @@ interface OrderPersistence {
     suspend fun saveOrder(order: Order): Order
 
     context(EffectScope<PersistenceError>)
-    suspend fun getOrders(): List<Order>
+    suspend fun getAllOrders(): List<Order>
 
     context(EffectScope<PersistenceError>)
     suspend fun clearOrders()
 
     context(EffectScope<PersistenceError>)
-    suspend fun dispatchOrder(orderId: String)
+    suspend fun upsertOrder(order: Order)
+
+    context(EffectScope<PersistenceError>)
+    suspend fun removeOrder(order: Order)
 }
 
-fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
+fun OrderPersistence(): OrderPersistence {
     return object : OrderPersistence {
-
-        private val orders = mutableListOf<Order>()
-        private val orderComparator = Comparator<Order> { o1, o2 ->
-            if (o1.containsSpecialZombie() == o2.containsSpecialZombie()) {
-                o1.createdAt.compareTo(o2.createdAt)
-            } else if (o1.containsSpecialZombie()) {
-                -1
-            } else {
-                1
-            }
-        }
 
         private val STORAGE_FILE = "orders.menu"
 
-        init {
-            runBlocking {
-                Either.catch {
-                    val file = File(STORAGE_FILE)
-                    val loadedOrders = file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }.sequence()
-                    loadedOrders
-                        .onRight {
-                            orders.addAll(it)
-                            orders.sortWith(orderComparator)
-                        }
-                        .onLeft {
-                            file.delete()
-                        }
-                }
-            }
-        }
-
         context(EffectScope<PersistenceError>)
         override suspend fun saveOrder(order: Order): Order {
-            ensure(orders.size < maxPendingOrders) {
-                MaxNumberOfOrders("No more than $maxPendingOrders pending orders allowed")
-            }
+            ensureNotNull(order.id) { InvalidOrderError("orderId cannot be null") }
             return Either.catch {
-                val createdOrder = order.copy(id = UUID.randomUUID().toString())
                 val file = File(STORAGE_FILE)
-                file.appendText("${createdOrder.serialize()}${System.lineSeparator()}")
-                createdOrder
-            }.onRight { createdOrder ->
-                orders.add(createdOrder)
-                orders.sortWith(orderComparator)
+                file.appendText("${order.serialize()}${System.lineSeparator()}")
+                order
             }.mapLeft { e ->
                 OrderCreationError(e.message.orEmpty())
             }.bind()
         }
 
         context(EffectScope<PersistenceError>)
-        override suspend fun getOrders(): List<Order> {
-            return orders
+        override suspend fun getAllOrders(): List<Order> {
+            return Either.catch {
+                val file = File(STORAGE_FILE)
+                file.readLines().map { serializedOrder -> Order.deserialize(serializedOrder) }
+                    .sequence()
+                    .bind()
+            }.mapLeft {
+                OrderRetrievalError("Error loading orders")
+            }.bind()
         }
 
         context(EffectScope<PersistenceError>)
@@ -96,26 +71,51 @@ fun OrderPersistence(maxPendingOrders: Int): OrderPersistence {
                 val file = File(STORAGE_FILE)
                 file.delete()
                 Unit
-            }.onRight {
-                orders.clear()
             }.mapLeft {
                 OrderDispatchError("Error dispatching orders")
             }.bind()
         }
 
         context(EffectScope<PersistenceError>)
-        override suspend fun dispatchOrder(orderId: String) {
-            val order = orders.firstOrNull { it.id == orderId } ?: shift(OrderRetrievalError(orderId))
+        override suspend fun upsertOrder(order: Order) {
+            ensureNotNull(order.id) { InvalidOrderError("Order id cannot be null") }
+            val storedOrders = getAllOrders()
+                .filterNot { storedOrder -> storedOrder.id.isNullOrBlank() }
+                .associateBy { storedOrder -> storedOrder.id!! }
+                .toMutableMap()
+
+            storedOrders[order.id] = order
+
+            storeOrders(storedOrders.values.toList())
+        }
+
+        context(EffectScope<PersistenceError>)
+        override suspend fun removeOrder(order: Order) {
+            ensureNotNull(order.id) { InvalidOrderError("Order id cannot be null") }
+            val storedOrders = getAllOrders()
+                .filterNot { storedOrder -> storedOrder.id.isNullOrBlank() }
+                .associateBy { storedOrder -> storedOrder.id!! }
+                .toMutableMap()
+
+            ensure(storedOrders.containsKey(order.id)) {
+                OrderNotFound(order.id, "Order with id=${order.id} was not found")
+            }
+
+            storedOrders.remove(order.id)
+
+            storeOrders(storedOrders.values.toList())
+        }
+
+        context(EffectScope<PersistenceError>)
+        private suspend fun storeOrders(orders: List<Order>) {
             return Either.catch {
                 val file = File(STORAGE_FILE)
                 file.delete()
-                orders.remove(order)
-                orders.add(order.copy(dispatchedAt = Clock.System.now()))
-                orders.forEach { currentOrder ->
-                    file.appendText("${currentOrder.serialize()}${System.lineSeparator()}")
+                orders.forEach { orderToStore ->
+                    file.appendText("${orderToStore.serialize()}${System.lineSeparator()}")
                 }
-            }.mapLeft {
-                OrderDispatchError("Error dispatching orders")
+            }.mapLeft { e ->
+                OrderCreationError(e.message.orEmpty())
             }.bind()
         }
     }
@@ -238,9 +238,3 @@ private suspend fun Dish.Companion.deserializeDish(serializedDish: String): Eith
         }.bind()
     }
 }
-
-private const val SPECIAL_ZOMBIE = "ESPECIAL ZOMBIE"
-private val Dish.isSpecialZombie: Boolean
-    get() = name == SPECIAL_ZOMBIE
-
-private fun Order.containsSpecialZombie(): Boolean = dishes.any { dish -> dish.isSpecialZombie }
