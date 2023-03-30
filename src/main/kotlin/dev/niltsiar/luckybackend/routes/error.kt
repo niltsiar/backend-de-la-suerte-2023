@@ -1,6 +1,7 @@
 package dev.niltsiar.luckybackend.routes
 
-import arrow.core.Either
+import arrow.core.continuations.EffectScope
+import arrow.core.continuations.effect
 import dev.niltsiar.luckybackend.KtorCtx
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.IllegalArgument
@@ -19,17 +20,22 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.response.respond
 
-suspend inline fun <reified A : Any> KtorCtx.respond(status: HttpStatusCode, either: Either<DomainError, A>): Unit =
-    when (either) {
-        is Either.Left -> respond(either.value)
-        is Either.Right -> {
-            if (either.value == Unit) {
-                call.respond(status)
-            } else {
-                call.respond(status, either.value)
-            }
+context(KtorCtx)
+suspend inline fun <reified A : Any> conduit(
+    status: HttpStatusCode,
+    crossinline block: suspend context(EffectScope<DomainError>) () -> A,
+): Unit = effect {
+    block(this)
+}.fold(
+    recover = { respond(it) },
+    transform = { value ->
+        if (value == Unit) {
+            call.respond(status)
+        } else {
+            call.respond(status, value)
         }
     }
+)
 
 suspend fun KtorCtx.respond(error: DomainError): Unit =
     when (error) {

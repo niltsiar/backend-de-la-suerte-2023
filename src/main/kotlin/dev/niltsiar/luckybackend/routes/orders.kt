@@ -1,9 +1,10 @@
 package dev.niltsiar.luckybackend.routes
 
 import arrow.core.Either
-import arrow.core.continuations.either
+import arrow.core.continuations.EffectScope
 import arrow.core.continuations.ensureNotNull
 import arrow.core.toNonEmptyListOrNull
+import dev.niltsiar.luckybackend.KtorCtx
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.IllegalArgument
 import dev.niltsiar.luckybackend.domain.Unexpected
@@ -12,14 +13,12 @@ import dev.niltsiar.luckybackend.service.Order
 import dev.niltsiar.luckybackend.service.OrderService
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.request.receive
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
-import io.ktor.util.pipeline.PipelineContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
@@ -29,45 +28,42 @@ fun orderRoutes() {
     routing {
         route("/orders") {
             post {
-                val res = either<DomainError, RemoteOrder> {
-                    val remoteOrder = receiveCatching<RemoteOrder>().bind()
-                    val order = remoteOrder.asOrder().bind()
+                conduit(HttpStatusCode.Created) {
+                    val remoteOrder = receiveCatching<RemoteOrder>()
+                    val order = remoteOrder.asOrder()
                     createOrder(order).asRemoteOrder()
                 }
-                respond(HttpStatusCode.Created, res)
             }
 
             get {
-                val res = either {
+                conduit(HttpStatusCode.OK) {
                     getOrders().map(Order::asRemoteOrder)
                 }
-                respond(HttpStatusCode.OK, res)
             }
         }
         get("/clear") {
-            val res = either {
+            conduit(HttpStatusCode.OK) {
                 clearOrders()
             }
-            respond(HttpStatusCode.OK, res)
         }
 
         get("/dispatch/{orderId}") {
-            val res = either {
+            conduit(HttpStatusCode.OK) {
                 val orderId = call.parameters["orderId"]
                 ensureNotNull(orderId) { IllegalArgument("Order Id cannot be null") }
                 dispatchOrder(orderId)
             }
-            respond(HttpStatusCode.OK, res)
         }
     }
 }
 
-private suspend inline fun <reified A : Any> PipelineContext<Unit, ApplicationCall>.receiveCatching(): Either<DomainError, A> {
+context(EffectScope<DomainError>)
+private suspend inline fun <reified A : Any> KtorCtx.receiveCatching(): A {
     return Either.catch {
         call.receive<A>()
     }.mapLeft { e ->
         Unexpected(e.message ?: "Received malformed JSON for ${A::class.simpleName}")
-    }
+    }.bind()
 }
 
 @Serializable
@@ -90,7 +86,8 @@ private fun RemoteDish.asDish() = Dish(
     quantity = quantity,
 )
 
-private fun RemoteOrder.asOrder(): Either<DomainError, Order> {
+context(EffectScope<DomainError>)
+private suspend fun RemoteOrder.asOrder(): Order {
     return Either.catch {
         Order(
             id = id,
@@ -101,7 +98,7 @@ private fun RemoteOrder.asOrder(): Either<DomainError, Order> {
         )
     }.mapLeft {
         Unexpected("Dishes cannot be an empty list")
-    }
+    }.bind()
 }
 
 private fun Dish.asRemoteDish() = RemoteDish(
