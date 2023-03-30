@@ -2,12 +2,14 @@ package dev.niltsiar.luckybackend.service
 
 import arrow.core.NonEmptyList
 import arrow.core.continuations.EffectScope
+import arrow.core.continuations.effect
 import dev.niltsiar.luckybackend.domain.DomainError
 import dev.niltsiar.luckybackend.domain.MaxNumberOfOrders
 import dev.niltsiar.luckybackend.domain.OrderAlreadyExists
 import dev.niltsiar.luckybackend.domain.OrderNotFound
 import dev.niltsiar.luckybackend.repo.OrderPersistence
 import java.util.UUID
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
@@ -59,6 +61,19 @@ fun OrderService(
                 -1
             } else {
                 1
+            }
+        }
+
+        init {
+            runBlocking {
+                effect {
+                    orderPersistence.getAllOrders()
+                        .filterNot { order -> order.id.isNullOrBlank() }
+                        .filter { order -> order.dispatchedAt == null }
+                        .forEach { order ->
+                            orders[order.id!!] = order
+                        }
+                }.orNull() // We need to execute the Effect
             }
         }
 
