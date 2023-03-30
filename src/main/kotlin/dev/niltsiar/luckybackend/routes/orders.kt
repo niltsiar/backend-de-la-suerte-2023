@@ -23,7 +23,6 @@ import io.ktor.util.pipeline.PipelineContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.Transient
 
 context(Application, OrderService)
 fun orderRoutes() {
@@ -79,7 +78,7 @@ data class RemoteDish(
 
 @Serializable
 data class RemoteOrder(
-    @Transient val id: String? = null,
+    val id: String? = null,
     val table: Int,
     val createdAt: Instant = Clock.System.now(),
     val dispatchedAt: Instant? = null,

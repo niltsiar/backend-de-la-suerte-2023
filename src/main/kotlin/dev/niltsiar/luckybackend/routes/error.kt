@@ -33,7 +33,7 @@ suspend inline fun <reified A : Any> KtorCtx.respond(status: HttpStatusCode, eit
 
 suspend fun KtorCtx.respond(error: DomainError): Unit =
     when (error) {
-        is ServiceError -> call.respond(HttpStatusCode.Conflict)
+        is ServiceError -> respond(error)
         is PersistenceError -> respond(error)
         is NetworkError -> respond(error)
     }
